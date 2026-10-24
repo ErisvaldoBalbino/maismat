@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Treino{% endblock %}
+{% block content %}
+<section class="trainer" id="trainer" data-config='{{ config|tojson }}'>
+  <div class="hud">
+    <div><span class="label">{{ MODES[config.mode] }}</span><span id="progress" class="value">—</span></div>
+    <div><span class="label">Acertos</span><span id="score" class="value">0</span></div>
+    <div><span class="label">Última</span><span id="last" class="value">—</span></div>
+  </div>
+  <div class="bar"><div id="bar"></div></div>
+
+  <div id="stage" class="stage">
+    <div id="question" class="question">Preparando…</div>
+    <input id="answer" class="answer" type="text" inputmode="numeric" autocomplete="off"
+           pattern="[0-9]*" aria-label="Resposta" disabled>
+    <div id="feedback" class="feedback">&nbsp;</div>
+  </div>
+
+  <div class="trainer-actions">
+    <label class="toggle"><input type="checkbox" id="auto"> Enviar automaticamente</label>
+    <span class="muted small">Enter envia · Tab pula · Esc encerra</span>
+    <button type="button" class="btn ghost small" id="stop">Encerrar</button>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='train.js') }}"></script>
+{% endblock %}

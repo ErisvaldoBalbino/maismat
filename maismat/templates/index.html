@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Treinar{% endblock %}
+{% block content %}
+{% include "_streak.html" %}
+
+<form class="card setup" action="{{ url_for('main.train') }}" method="get" id="setup">
+  <h2>Novo treino</h2>
+
+  <fieldset>
+    <legend>Modo</legend>
+    <div class="segmented">
+      <label><input type="radio" name="mode" value="timed" checked><span>Contra o tempo</span></label>
+      <label><input type="radio" name="mode" value="count"><span>N questões</span></label>
+      <label><input type="radio" name="mode" value="table"><span>Tabuada</span></label>
+      <label {% if not weak_count %}class="disabled" title="Treine um pouco mais para detectar pontos fracos"{% endif %}>
+        <input type="radio" name="mode" value="weak" {% if not weak_count %}disabled{% endif %}>
+        <span>Pontos fracos{% if weak_count %} ({{ weak_count }}){% endif %}</span>
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset data-show="timed count table">
+    <legend>Operações</legend>
+    <div class="chips">
+      {% for op in ['add', 'sub', 'mul', 'div'] %}
+      <label data-op="{{ op }}"><input type="checkbox" name="ops" value="{{ op }}" {% if op in ['add', 'mul'] %}checked{% endif %}>
+        <span>{{ SYMBOLS[op] }} {{ OP_NAMES[op] }}</span></label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset data-show="timed count">
+    <legend>Dificuldade</legend>
+    <div class="segmented">
+      <label><input type="radio" name="difficulty" value="easy" checked><span>Fácil <small>1 dígito · tabuada</small></span></label>
+      <label><input type="radio" name="difficulty" value="medium"><span>Médio <small>2 dígitos</small></span></label>
+      <label><input type="radio" name="difficulty" value="hard"><span>Difícil <small>3 dígitos · 2×2</small></span></label>
+    </div>
+  </fieldset>
+
+  <fieldset data-show="table">
+    <legend>Tabuadas</legend>
+    <div class="chips tables">
+      {% for t in range(2, 13) %}
+      <label><input type="checkbox" name="tables" value="{{ t }}" {% if t in [7, 8, 9] %}checked{% endif %}><span>{{ t }}</span></label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset data-show="timed">
+    <legend>Tempo</legend>
+    <div class="segmented">
+      {% for s in [30, 60, 120, 300] %}
+      <label><input type="radio" name="time_limit" value="{{ s }}" {% if s == 60 %}checked{% endif %}><span>{{ s if s < 60 else (s // 60) ~ ' min' }}{% if s < 60 %}s{% endif %}</span></label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset data-show="count table weak">
+    <legend>Quantidade de questões</legend>
+    <div class="segmented">
+      {% for n in [10, 20, 50, 100] %}
+      <label><input type="radio" name="count" value="{{ n }}" {% if n == 20 %}checked{% endif %}><span>{{ n }}</span></label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <button type="submit" class="btn primary big">Começar</button>
+</form>
+
+{% if totals.total %}
+<p class="muted center">
+  {{ totals.total }} questões respondidas em {{ totals.sessions }} sessões ·
+  {{ (100 * totals.correct / totals.total)|round|int }}% de acerto
+</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Mostra só os campos relevantes ao modo escolhido e lembra a última configuração.
+  const form = document.getElementById("setup");
+  const KEY = "maismat:setup";
+
+  function update() {
+    const mode = form.mode.value;
+    form.querySelectorAll("fieldset[data-show]").forEach(fs => {
+      const on = fs.dataset.show.split(" ").includes(mode);
+      fs.hidden = !on;
+      fs.disabled = !on;
+    });
+    // Na tabuada só fazem sentido multiplicação e divisão.
+    form.querySelectorAll(".chips [data-op]").forEach(l => {
+      const hide = mode === "table" && !["mul", "div"].includes(l.dataset.op);
+      l.hidden = hide;
+      l.querySelector("input").disabled = hide;
+    });
+  }
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (saved) {
+      for (const [name, values] of Object.entries(saved)) {
+        form.querySelectorAll(`[name="${name}"]`).forEach(el => {
+          if (el.disabled) return;
+          el.checked = values.includes(el.value);
+        });
+      }
+    }
+  } catch (e) {}
+  if (!form.mode.value) form.querySelector('[name="mode"]').checked = true;
+
+  form.addEventListener("change", update);
+  form.addEventListener("submit", e => {
+    if (form.mode.value !== "weak" && form.mode.value !== "table" && !form.querySelector('[name="ops"]:checked')) {
+      e.preventDefault();
+      alert("Escolha pelo menos uma operação.");
+      return;
+    }
+    if (form.mode.value === "table" && !form.querySelector('[name="tables"]:checked')) {
+      e.preventDefault();
+      alert("Escolha pelo menos uma tabuada.");
+      return;
+    }
+    const data = {};
+    for (const el of form.querySelectorAll("input[name]")) {
+      data[el.name] ??= [];
+      if (el.checked) data[el.name].push(el.value);
+    }
+    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+  });
+  update();
+</script>
+{% endblock %}

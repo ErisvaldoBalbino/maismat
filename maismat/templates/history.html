@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Histórico{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <h2>Histórico</h2>
+    <div class="actions">
+      <a class="btn ghost small" href="{{ url_for('main.export_json') }}">Exportar JSON</a>
+      <a class="btn ghost small" href="{{ url_for('main.export_csv') }}">Exportar CSV</a>
+    </div>
+  </div>
+  {% if sessions %}
+  <table class="table">
+    <thead><tr><th>Data</th><th>Treino</th><th>Operações</th><th>Acertos</th><th>Precisão</th><th>Tempo médio</th></tr></thead>
+    <tbody>
+    {% for session in sessions %}
+      <tr class="link" onclick="location.href='{{ url_for('main.session_detail', session_id=session.id) }}'">
+        <td><a href="{{ url_for('main.session_detail', session_id=session.id) }}">{{ session.started_at[:16].replace('T', ' ') }}</a></td>
+        <td>{% include "_session_label.html" %}</td>
+        <td>{% for op in session.operations.split(',') if op %}{{ SYMBOLS[op] }} {% endfor %}</td>
+        <td>{{ session.correct }}/{{ session.total }}</td>
+        <td>{{ (session.correct / session.total)|pct }}</td>
+        <td>{{ session.avg_ms|seconds }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Nenhum treino ainda. <a href="{{ url_for('main.index') }}">Comece agora!</a></p>
+  {% endif %}
+</section>
+{% endblock %}

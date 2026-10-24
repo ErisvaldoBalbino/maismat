@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Resultado{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Resultado</h2>
+  <p class="muted">{% include "_session_label.html" %} · {{ session.started_at.replace('T', ' ') }}</p>
+
+  <div class="stats-grid">
+    <div class="stat"><span class="big">{{ summary.correct }}<small>/{{ summary.total }}</small></span><span class="label">acertos</span></div>
+    <div class="stat"><span class="big">{{ summary.accuracy|pct }}</span><span class="label">precisão</span></div>
+    <div class="stat"><span class="big">{{ summary.avg_ms|seconds }}</span><span class="label">tempo médio (acertos)</span></div>
+    <div class="stat"><span class="big">{{ '%.1f'|format(summary.per_minute) if summary.per_minute else '—' }}</span><span class="label">acertos/min</span></div>
+  </div>
+
+  {% if summary.by_op|length > 1 %}
+  <table class="table">
+    <thead><tr><th>Operação</th><th>Acertos</th><th>Precisão</th><th>Tempo médio</th></tr></thead>
+    <tbody>
+    {% for op, s in summary.by_op.items() %}
+      <tr><td>{{ SYMBOLS[op] }} {{ OP_NAMES[op] }}</td><td>{{ s.correct }}/{{ s.total }}</td>
+          <td>{{ s.accuracy|pct }}</td><td>{{ s.avg_ms|seconds }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div class="actions">
+    <a class="btn primary" href="{{ url_for('main.index') }}">Treinar de novo</a>
+    <a class="btn ghost" href="{{ url_for('main.performance') }}">Ver desempenho</a>
+  </div>
+</section>
+
+<section class="card">
+  <h3>Questões</h3>
+  <table class="table compact">
+    <thead><tr><th>#</th><th>Questão</th><th>Sua resposta</th><th>Tempo</th></tr></thead>
+    <tbody>
+    {% for a in summary.attempts %}
+      <tr class="{{ 'ok' if a.correct else 'bad' }}">
+        <td>{{ loop.index }}</td>
+        <td>{{ a.a }} {{ SYMBOLS[a.op] }} {{ a.b }} = {{ a.answer }}</td>
+        <td>{% if a.given is none %}<em>pulou</em>{% else %}{{ a.given }}{% endif %} {{ '✓' if a.correct else '✗' }}</td>
+        <td>{{ a.time_ms|seconds }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

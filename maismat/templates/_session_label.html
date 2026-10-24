@@ -1,0 +1,4 @@
+{{ MODES[session.mode] }}
+{%- if session.mode == 'table' %} {{ session.tables.replace(',', ', ') }}
+{%- elif session.mode != 'weak' %} · {{ DIFFICULTY_NAMES[session.difficulty] }}{% endif %}
+{%- if session.mode == 'timed' %} · {{ session.time_limit_s }}s{% endif %}

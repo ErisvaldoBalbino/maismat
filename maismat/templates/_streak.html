@@ -1,0 +1,15 @@
+<section class="card streak">
+  <div class="streak-numbers">
+    <div><span class="big">{{ streak.current }}</span><span class="label">dias seguidos</span></div>
+    <div><span class="big">{{ streak.best }}</span><span class="label">recorde</span></div>
+    <div>
+      <span class="big">{{ streak.today }}<small>/{{ streak.goal }}</small></span>
+      <span class="label">questões hoje {% if streak.today_met %}✓{% endif %}</span>
+    </div>
+  </div>
+  <div class="progress"><div style="width: {{ [100, (100 * streak.today / streak.goal)|round]|min }}%"></div></div>
+  <form class="goal-form" method="post" action="{{ url_for('main.update_goal') }}">
+    <label>Meta diária <input type="number" name="daily_goal" min="1" max="10000" value="{{ streak.goal }}"></label>
+    <button type="submit" class="btn small ghost">Salvar</button>
+  </form>
+</section>
