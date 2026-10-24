@@ -4,24 +4,78 @@
 {% block content %}
 {% include "_streak.html" %}
 
+{% set cal = streak.calendar %}
 <section class="card">
-  <h3>Calendário <span class="muted small">(últimas 12 semanas · meta: {{ streak.goal }} questões)</span></h3>
-  <div class="calendar">
-    {% for d in streak.calendar %}
-      <div class="day {% if d.met %}met{% elif d.count %}some{% endif %}" title="{{ d.day }}: {{ d.count }} questões"></div>
+  <div class="card-head">
+    <h3>Atividade</h3>
+    <span class="muted small">últimos 6 meses · meta de {{ streak.goal }} questões por dia</span>
+  </div>
+  <div class="heatmap" style="--weeks: {{ cal.weeks|length }}">
+    <div class="heatmap-months" aria-hidden="true">
+      {% for m in cal.months %}<span style="grid-column: {{ m.col + 1 }}">{{ m.name }}</span>{% endfor %}
+    </div>
+    <div class="heatmap-weekdays" aria-hidden="true"><span>seg</span><span></span><span>qua</span><span></span><span>sex</span><span></span><span></span></div>
+    <div class="heatmap-grid">
+      {% for week in cal.weeks %}{% for d in week %}
+      <div class="cell l{{ d.level }}{% if d.future %} future{% endif %}"
+           {% if not d.future %}data-tip="{{ d.label }}|{{ d.count }} {{ 'questão' if d.count == 1 else 'questões' }}"{% endif %}></div>
+      {% endfor %}{% endfor %}
+    </div>
+  </div>
+  <div class="heatmap-legend">
+    <span>Menos</span>
+    {% for l in range(5) %}<i class="cell l{{ l }}"></i>{% endfor %}
+    <span>Mais</span>
+    <span class="muted">· verde-escuro = meta batida</span>
+  </div>
+</section>
+
+{% if trends %}
+<section class="card">
+  <div class="card-head">
+    <h3>Últimos 7 dias</h3>
+    <span class="muted small">comparado com os 7 dias anteriores</span>
+  </div>
+  <div class="trends">
+    {% for t in trends %}
+    <div class="trend" style="--op: var(--op-{{ t.op }})">
+      <div class="trend-op"><span class="trend-symbol">{{ SYMBOLS[t.op] }}</span>{{ OP_NAMES[t.op] }}</div>
+      <div class="trend-main">
+        <span class="big">{{ t.avg_ms|seconds }}</span>
+        {% if t.delta_ms is not none %}
+          {% if t.delta_ms|abs < 50 %}<span class="delta">= estável</span>
+          {% elif t.delta_ms < 0 %}<span class="delta good">▼ {{ (-t.delta_ms)|seconds }}</span>
+          {% else %}<span class="delta bad">▲ {{ t.delta_ms|seconds }}</span>{% endif %}
+        {% endif %}
+      </div>
+      <div class="label">tempo médio por acerto</div>
+      <div class="trend-foot">
+        <span>{{ t.accuracy|pct }} de acerto
+          {%- if t.delta_accuracy is not none and (t.delta_accuracy * 100)|round|int != 0 %}
+            {% set pp = (t.delta_accuracy * 100)|round|int %}
+            <span class="delta {{ 'good' if pp > 0 else 'bad' }}">{{ '%+d'|format(pp) }} p.p.</span>
+          {%- endif %}</span>
+        <span>{{ t.total }} questões</span>
+      </div>
+    </div>
     {% endfor %}
   </div>
 </section>
+{% endif %}
 
 {% if series.days %}
 <script type="application/json" id="chart-data">{{ {'series': series, 'names': OP_NAMES}|tojson }}</script>
 <section class="card">
-  <h3>Tempo médio por questão <span class="muted small">(só acertos, em segundos — menor é melhor)</span></h3>
-  <div class="chart"><canvas id="chart-time"></canvas></div>
-</section>
-<section class="card">
-  <h3>Precisão <span class="muted small">(%)</span></h3>
-  <div class="chart"><canvas id="chart-acc"></canvas></div>
+  <div class="card-head">
+    <h3>Evolução</h3>
+    <div class="tabs" role="tablist" id="chart-tabs">
+      <button type="button" role="tab" data-metric="avg_ms" aria-selected="true">Tempo</button>
+      <button type="button" role="tab" data-metric="accuracy" aria-selected="false">Precisão</button>
+      <button type="button" role="tab" data-metric="total" aria-selected="false">Volume</button>
+    </div>
+  </div>
+  <p class="muted small chart-hint" id="chart-hint"></p>
+  <div class="chart"><canvas id="chart"></canvas></div>
 </section>
 {% endif %}
 
@@ -43,7 +97,7 @@
         <td>{{ f.attempts }}</td>
         <td>{{ f.errors }} ({{ f.error_rate|pct }})</td>
         <td>{{ f.avg_ms|seconds }}</td>
-        <td>{% if f.avg_ms %}{{ '%.1f'|format(f.slowness) }}×{% else %}—{% endif %}</td>
+        <td>{% if f.avg_ms %}{{ ('%.1f'|format(f.slowness)).replace('.', ',') }}×{% else %}—{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>
@@ -52,5 +106,12 @@
   <p class="muted">Ainda não há dados suficientes. Uma questão precisa aparecer pelo menos 2 vezes para ser avaliada.</p>
   {% endif %}
 </section>
+
+{% if totals.total %}
+<p class="muted small center totals">
+  {{ totals.total }} questões respondidas em {{ totals.sessions }} sessões ·
+  {{ (100 * totals.correct / totals.total)|round|int }}% de acerto
+</p>
+{% endif %}
 {% endblock %}
 

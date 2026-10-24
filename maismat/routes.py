@@ -42,7 +42,7 @@ def inject_names():
 def fmt_seconds(ms):
     if ms is None:
         return "—"
-    return f"{ms / 1000:.2f}s"
+    return f"{ms / 1000:.2f}s".replace(".", ",")
 
 
 @bp.app_template_filter("pct")
@@ -117,7 +117,6 @@ def index():
     return render_template(
         "index.html",
         streak=stats.streak_info(daily_goal()),
-        totals=stats.totals(),
         weak_count=len(stats.weak_facts()),
     )
 
@@ -155,6 +154,7 @@ def performance():
     return render_template(
         "stats.html",
         series=stats.daily_series(),
+        trends=stats.op_trends(),
         weak=stats.weak_facts(),
         streak=stats.streak_info(daily_goal()),
         totals=stats.totals(),

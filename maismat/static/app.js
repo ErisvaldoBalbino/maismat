@@ -408,53 +408,182 @@
     return chartLib;
   }
 
+  const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const fmtDay = d => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]}`;
+  const fmtNum = (v, digits) => v.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
+  const METRICS = {
+    avg_ms: {
+      hint: "Tempo médio por acerto, em segundos (média dos últimos 7 dias de treino). Quanto menor, melhor.",
+      smooth: true,
+      value: v => v / 1000,
+      tick: v => `${fmtNum(v, 1)}s`,
+      label: v => `${fmtNum(v, 2)}s`,
+      y: { beginAtZero: true },
+    },
+    accuracy: {
+      hint: "Porcentagem de acertos (média dos últimos 7 dias de treino).",
+      smooth: true,
+      value: v => v,
+      tick: v => `${v}%`,
+      label: v => `${fmtNum(v, 0)}%`,
+      y: { suggestedMin: 50, max: 100 },
+    },
+    total: {
+      hint: "Questões respondidas por dia.",
+      value: v => v,
+      tick: v => v,
+      label: v => `${v} ${v === 1 ? "questão" : "questões"}`,
+      y: { beginAtZero: true, stacked: true },
+      bar: true,
+    },
+  };
+
+  // Dica flutuante para os quadradinhos do calendário.
+  function initHeatmapTips(main) {
+    const grid = $(".heatmap-grid", main);
+    if (!grid) return () => {};
+    const tip = document.createElement("div");
+    tip.className = "tip";
+    tip.hidden = true;
+    document.body.append(tip);
+    const show = e => {
+      const cell = e.target.closest("[data-tip]");
+      if (!cell) { tip.hidden = true; return; }
+      const [day, count] = cell.dataset.tip.split("|");
+      tip.innerHTML = "<strong></strong><span></span>";
+      tip.firstChild.textContent = count;
+      tip.lastChild.textContent = day;
+      const r = cell.getBoundingClientRect();
+      tip.style.left = `${r.left + r.width / 2}px`;
+      tip.style.top = `${r.top}px`;
+      tip.hidden = false;
+    };
+    const hide = () => { tip.hidden = true; };
+    grid.addEventListener("mouseover", show);
+    grid.addEventListener("mouseleave", hide);
+    window.addEventListener("scroll", hide, { passive: true });
+    return () => {
+      tip.remove();
+      window.removeEventListener("scroll", hide);
+    };
+  }
+
   function initStats(main) {
+    const removeTips = initHeatmapTips(main);
     const node = $("#chart-data", main);
-    if (!node) return;
+    if (!node) return removeTips;
+
     const { series: data, names } = JSON.parse(node.textContent);
     const css = getComputedStyle(document.documentElement);
     const color = name => css.getPropertyValue(name).trim();
-    const labels = data.days.map(d => d.slice(8, 10) + "/" + d.slice(5, 7));
-    const charts = [];
+    const labels = data.days.map(fmtDay);
+    const tabs = $("#chart-tabs", main);
+    const hint = $("#chart-hint", main);
+    let chart = null;
     let alive = true;
+
+    // Média móvel ponderada pelo nº de questões: suaviza a oscilação de um dia para o outro.
+    function smooth(values, weights, size = 7) {
+      return values.map((v, i) => {
+        if (v === null) return null;
+        let sum = 0, total = 0;
+        for (let j = Math.max(0, i - size + 1); j <= i; j++) {
+          if (values[j] === null || !weights[j]) continue;
+          sum += values[j] * weights[j];
+          total += weights[j];
+        }
+        return total ? sum / total : v;
+      });
+    }
+    const OPS = ["add", "sub", "mul", "div"].filter(op => op in data.series);
+
+    function draw(Chart, metric) {
+      const m = METRICS[metric];
+      chart?.destroy();
+      hint.textContent = m.hint;
+      const few = labels.length < 12;
+      chart = new Chart($("#chart", main), {
+        type: m.bar ? "bar" : "line",
+        data: {
+          labels,
+          datasets: OPS.map(op => ({
+            label: names[op],
+            data: (m.smooth ? smooth(data.series[op][metric], data.series[op].total) : data.series[op][metric])
+              .map(v => (v === null ? null : m.value(v))),
+            borderColor: color(`--op-${op}`),
+            backgroundColor: color(`--op-${op}`),
+            spanGaps: true,
+            cubicInterpolationMode: "monotone",
+            borderWidth: 2.5,
+            pointRadius: few ? 3 : 0,
+            pointHoverRadius: 5,
+            pointHoverBorderWidth: 2,
+            pointHoverBorderColor: color("--card"),
+            borderRadius: 3,
+            maxBarThickness: 18,
+          })),
+        },
+        options: {
+          maintainAspectRatio: false,
+          animation: { duration: 300 },
+          interaction: { mode: "index", intersect: false },
+          layout: { padding: { top: 4 } },
+          scales: {
+            x: {
+              stacked: !!m.bar,
+              grid: { display: false },
+              border: { display: false },
+              ticks: { maxRotation: 0, autoSkipPadding: 18 },
+            },
+            y: {
+              ...m.y,
+              grid: { color: color("--line") },
+              border: { display: false },
+              ticks: { callback: m.tick, maxTicksLimit: 6, padding: 8 },
+            },
+          },
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: { usePointStyle: true, pointStyle: "circle", boxWidth: 7, boxHeight: 7, padding: 18 },
+            },
+            tooltip: {
+              backgroundColor: color("--ink"),
+              titleColor: color("--on-ink"),
+              bodyColor: color("--on-ink"),
+              titleFont: { family: css.getPropertyValue("--font-display"), weight: "600", size: 13 },
+              bodyFont: { size: 13 },
+              padding: 10,
+              cornerRadius: 10,
+              boxPadding: 5,
+              usePointStyle: true,
+              filter: item => item.raw !== null && !(m.bar && item.raw === 0),
+              callbacks: { label: item => ` ${item.dataset.label}: ${m.label(item.raw)}` },
+            },
+          },
+        },
+      });
+    }
 
     loadChartLib().then(Chart => {
       if (!alive) return;
       Chart.defaults.font.family = css.getPropertyValue("--font-body");
+      Chart.defaults.font.size = 12;
       Chart.defaults.color = color("--muted");
-      Chart.defaults.borderColor = color("--line");
-
-      const chart = (id, key, transform, yOpts) => {
-        charts.push(new Chart($(`#${id}`, main), {
-          type: "line",
-          data: {
-            labels,
-            datasets: Object.entries(data.series).map(([op, s]) => ({
-              label: names[op],
-              data: s[key].map(v => (v === null ? null : transform(v))),
-              borderColor: color(`--op-${op}`),
-              backgroundColor: color(`--op-${op}`),
-              spanGaps: true,
-              tension: 0.3,
-              pointRadius: 3,
-              borderWidth: 2,
-            })),
-          },
-          options: {
-            maintainAspectRatio: false,
-            interaction: { mode: "index", intersect: false },
-            scales: { y: yOpts, x: { grid: { display: false } } },
-            plugins: { legend: { position: "bottom", labels: { usePointStyle: true, boxWidth: 7, boxHeight: 7, padding: 16 } } },
-          },
-        }));
-      };
-      chart("chart-time", "avg_ms", v => v / 1000, { beginAtZero: true });
-      chart("chart-acc", "accuracy", v => v, { min: 0, max: 100 });
+      draw(Chart, "avg_ms");
+      tabs.addEventListener("click", e => {
+        const btn = e.target.closest("[data-metric]");
+        if (!btn) return;
+        tabs.querySelectorAll("[data-metric]").forEach(b => b.setAttribute("aria-selected", b === btn));
+        draw(Chart, btn.dataset.metric);
+      });
     }).catch(() => toast("Não foi possível carregar os gráficos.", "error"));
 
     return () => {
       alive = false;
-      charts.forEach(c => c.destroy());
+      chart?.destroy();
+      removeTips();
     };
   }
 

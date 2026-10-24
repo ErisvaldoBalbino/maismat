@@ -2,10 +2,10 @@
 {% block page %}index{% endblock %}
 {% block title %}Treinar{% endblock %}
 {% block content %}
+<div class="home">
 {% include "_streak.html" %}
 
 <form class="card setup" action="{{ url_for('main.train') }}" method="get" id="setup">
-  <h2>Novo treino</h2>
 
   <fieldset>
     <legend>Modo</legend>
@@ -69,11 +69,6 @@
   <button type="submit" class="btn primary big">Começar</button>
 </form>
 
-{% if totals.total %}
-<p class="muted center">
-  {{ totals.total }} questões respondidas em {{ totals.sessions }} sessões ·
-  {{ (100 * totals.correct / totals.total)|round|int }}% de acerto
-</p>
-{% endif %}
+</div>
 {% endblock %}
 

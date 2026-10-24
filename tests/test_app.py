@@ -180,3 +180,17 @@ def test_finish_reports_goal_reached(client):
 def test_flash_messages_reach_page(client):
     page = client.get("/treinar?mode=count", follow_redirects=True).get_data(as_text=True)
     assert "Escolha pelo menos uma opera" in page and '"error"' in page
+
+
+def test_calendar_and_trends(client, app):
+    data = start(client, mode="count", ops=["add"], count=3)
+    for p in data["problems"]:
+        answer(client, data["session_id"], p, p["answer"], 1200)
+    with app.app_context():
+        cal = stats.streak_info(goal=3)["calendar"]
+        trends = stats.op_trends()
+    assert len(cal["weeks"]) == 26 and all(len(w) == 7 for w in cal["weeks"])
+    today = date.today().isoformat()
+    cell = next(d for w in cal["weeks"] for d in w if d["day"] == today)
+    assert cell["count"] == 3 and cell["level"] == 3 and not cell["future"]
+    assert [(t["op"], t["total"], t["delta_ms"]) for t in trends] == [("add", 3, None)]

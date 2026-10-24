@@ -10,7 +10,7 @@
     <div class="stat"><span class="big">{{ summary.correct }}<small>/{{ summary.total }}</small></span><span class="label">acertos</span></div>
     <div class="stat"><span class="big">{{ summary.accuracy|pct }}</span><span class="label">precisão</span></div>
     <div class="stat"><span class="big">{{ summary.avg_ms|seconds }}</span><span class="label">tempo médio (acertos)</span></div>
-    <div class="stat"><span class="big">{{ '%.1f'|format(summary.per_minute) if summary.per_minute else '—' }}</span><span class="label">acertos/min</span></div>
+    <div class="stat"><span class="big">{{ ('%.1f'|format(summary.per_minute)).replace('.', ',') if summary.per_minute else '—' }}</span><span class="label">acertos/min</span></div>
   </div>
 
   {% if summary.by_op|length > 1 %}

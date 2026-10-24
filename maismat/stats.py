@@ -82,17 +82,59 @@ def daily_series(days=90):
     for op in OPERATIONS:
         if not any(r["op"] == op for r in rows):
             continue
-        avg_ms, accuracy = [], []
+        avg_ms, accuracy, total = [], [], []
         for d in days_list:
             r = index.get((d, op))
             avg_ms.append(round(r["avg_ms"]) if r and r["avg_ms"] is not None else None)
             accuracy.append(round(100 * r["correct"] / r["total"], 1) if r else None)
-        series[op] = {"avg_ms": avg_ms, "accuracy": accuracy}
+            total.append(r["total"] if r else 0)
+        series[op] = {"avg_ms": avg_ms, "accuracy": accuracy, "total": total}
 
     volume = []
     for d in days_list:
         volume.append(sum(index[(d, op)]["total"] for op in OPERATIONS if (d, op) in index))
     return {"days": days_list, "series": series, "volume": volume}
+
+
+def op_trends(today=None, window=7):
+    """Por operação: últimos `window` dias comparados com os `window` anteriores."""
+    today = today or date.today()
+    start = (today - timedelta(days=window - 1)).isoformat()
+    prev_start = (today - timedelta(days=2 * window - 1)).isoformat()
+    rows = get_db().execute(
+        """
+        SELECT op,
+               substr(created_at, 1, 10) >= ?                  AS recent,
+               COUNT(*)                                        AS total,
+               SUM(correct)                                    AS correct,
+               AVG(CASE WHEN correct = 1 THEN time_ms END)     AS avg_ms
+        FROM attempts
+        WHERE substr(created_at, 1, 10) >= ?
+        GROUP BY op, recent
+        """,
+        (start, prev_start),
+    ).fetchall()
+    data = {(r["op"], bool(r["recent"])): r for r in rows}
+
+    trends = []
+    for op in OPERATIONS:
+        cur, prev = data.get((op, True)), data.get((op, False))
+        if cur is None:
+            continue
+        trend = {
+            "op": op,
+            "total": cur["total"],
+            "avg_ms": cur["avg_ms"],
+            "accuracy": cur["correct"] / cur["total"],
+            "delta_ms": None,
+            "delta_accuracy": None,
+        }
+        if prev is not None:
+            if cur["avg_ms"] is not None and prev["avg_ms"] is not None:
+                trend["delta_ms"] = cur["avg_ms"] - prev["avg_ms"]
+            trend["delta_accuracy"] = trend["accuracy"] - prev["correct"] / prev["total"]
+        trends.append(trend)
+    return trends
 
 
 def _fact_key(op, a, b):
@@ -186,24 +228,55 @@ def streak_info(goal, today=None):
         best = max(best, run)
         prev = day
 
-    # Últimas 12 semanas para o calendário (começando numa segunda-feira).
-    start = today - timedelta(days=7 * 12 - 1)
-    start -= timedelta(days=start.weekday())
-    calendar = []
-    d = start
-    while d <= today:
-        n = counts.get(d.isoformat(), 0)
-        calendar.append({"day": d.isoformat(), "count": n, "met": n >= goal})
-        d += timedelta(days=1)
-
     return {
         "goal": goal,
         "today": today_count,
         "today_met": today_count >= goal,
         "current": current,
         "best": best,
-        "calendar": calendar,
+        "calendar": calendar(counts, goal, today),
     }
+
+
+MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+WEEKDAYS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
+
+def calendar(counts, goal, today, weeks=26):
+    """Grade de semanas (colunas, de segunda a domingo) para o calendário de atividade."""
+    start = today - timedelta(days=today.weekday() + 7 * (weeks - 1))
+    columns, months = [], []
+    for w in range(weeks):
+        week = []
+        for i in range(7):
+            d = start + timedelta(days=7 * w + i)
+            n = counts.get(d.isoformat(), 0)
+            if n == 0:
+                level = 0
+            elif n < goal / 2:
+                level = 1
+            elif n < goal:
+                level = 2
+            elif n < 2 * goal:
+                level = 3
+            else:
+                level = 4
+            week.append({
+                "day": d.isoformat(),
+                "label": f"{WEEKDAYS[d.weekday()]}, {d.day} {MONTHS[d.month - 1]}",
+                "count": n,
+                "level": level,
+                "future": d > today,
+            })
+        # Rótulo do mês na semana em que ele começa.
+        first_of_month = [d for d in week if d["day"].endswith("-01")]
+        if first_of_month:
+            months.append({"col": w, "name": MONTHS[int(first_of_month[0]["day"][5:7]) - 1]})
+        columns.append(week)
+    # O mês da primeira coluna, se houver espaço antes do próximo rótulo.
+    if not months or months[0]["col"] >= 3:
+        months.insert(0, {"col": 0, "name": MONTHS[start.month - 1]})
+    return {"weeks": columns, "months": months}
 
 
 def totals():
