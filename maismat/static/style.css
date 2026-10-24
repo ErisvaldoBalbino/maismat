@@ -281,7 +281,7 @@ legend { font-weight: 600; margin-bottom: 8px; font-size: 12px; color: var(--mut
 .heatmap-legend .cell { display: inline-block; width: 12px; }
 .heatmap-legend span { margin: 0 4px; }
 
-/* Dica flutuante (calendário). */
+/* Dica flutuante (calendário e linha do tempo). */
 .tip {
   position: fixed;
   z-index: 40;
@@ -339,6 +339,24 @@ legend { font-weight: 600; margin-bottom: 8px; font-size: 12px; color: var(--mut
 .tabs button:hover { color: var(--text); }
 .tabs button[aria-selected="true"] { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(60, 45, 25, .15); }
 .chart-hint { margin: 4px 0 12px; }
+
+/* ---------- linha do tempo da sessão */
+.timeline {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(1px, calc(240px / var(--n)), 4px);
+  height: 140px;
+  margin-top: 16px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--line);
+}
+.timeline-bar { flex: 1; min-width: 0; border-radius: 3px 3px 0 0; background: var(--ok); opacity: .85; transition: opacity .15s; }
+.timeline-bar.bad { background: var(--bad); }
+.timeline-bar:hover { opacity: 1; }
+.timeline-avg { position: absolute; z-index: 1; left: 0; right: 0; border-top: 1px dashed var(--ink); opacity: .55; pointer-events: none; }
+.timeline-avg span { position: absolute; right: 0; bottom: 3px; padding: 0 6px; font-size: 12px; font-weight: 600; color: var(--ink); background: var(--card); border-radius: 4px; }
+.timeline-axis { display: flex; justify-content: space-between; margin-top: 6px; }
 
 /* ---------- tabelas */
 .table { width: 100%; border-collapse: collapse; margin-top: 12px; font-variant-numeric: tabular-nums; }
@@ -440,7 +458,7 @@ legend { font-weight: 600; margin-bottom: 8px; font-size: 12px; color: var(--mut
 .toast.leaving { animation: toast-out .2s ease-in forwards; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(12px) scale(.97); } }
 @keyframes toast-out { to { opacity: 0; transform: translateX(16px); } }
-.toast-icon {
+.toast-icon, .mark {
   flex: none;
   display: grid;
   place-items: center;
@@ -452,8 +470,11 @@ legend { font-weight: 600; margin-bottom: 8px; font-size: 12px; color: var(--mut
   font-weight: 700;
   background: color-mix(in srgb, var(--on-ink) 18%, transparent);
 }
-.toast.success .toast-icon { background: var(--ok); color: #fff; }
-.toast.error .toast-icon { background: var(--bad); color: #fff; }
+.toast.success .toast-icon, .mark.ok { background: var(--ok); color: #fff; }
+.toast.error .toast-icon, .mark.bad { background: var(--bad); color: #fff; }
+/* Mesmo ícone dos toasts, usado nas respostas da sessão. */
+.mark { display: inline-grid; width: 18px; height: 18px; margin: 0; font-size: 11px; }
+.with-mark { display: inline-flex; align-items: center; gap: 6px; }
 .toast-text { flex: 1; }
 .toast-close {
   flex: none;
@@ -487,5 +508,6 @@ legend { font-weight: 600; margin-bottom: 8px; font-size: 12px; color: var(--mut
   .table th, .table td { padding: 6px; }
   .heatmap { --gap: 2px; column-gap: 6px; }
   .heatmap-weekdays { font-size: 9px; }
+  .timeline { gap: clamp(1px, calc(80px / var(--n)), 4px); }
   .toasts { right: 16px; bottom: 16px; align-items: stretch; }
 }

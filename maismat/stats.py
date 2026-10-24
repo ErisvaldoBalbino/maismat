@@ -36,7 +36,23 @@ def session_summary(session_id):
         by_op[r["op"]].append(r)
     summary["by_op"] = {op: _summary_from_rows(by_op[op]) for op in OPERATIONS if by_op[op]}
     summary["attempts"] = [dict(r) for r in rows]
+    summary["timeline"] = timeline(summary["attempts"], summary["avg_ms"])
     return summary
+
+
+def timeline(attempts, avg_ms=None):
+    """Uma barra por questão, na ordem respondida, com altura proporcional ao tempo."""
+    longest = max((a["time_ms"] for a in attempts), default=0)
+    if not longest:
+        return None
+    return {
+        "bars": [
+            {"height": max(4, round(100 * a["time_ms"] / longest)), "attempt": a}
+            for a in attempts
+        ],
+        "avg": round(100 * avg_ms / longest) if avg_ms else None,
+        "total_ms": sum(a["time_ms"] for a in attempts),
+    }
 
 
 def list_sessions(limit=200):

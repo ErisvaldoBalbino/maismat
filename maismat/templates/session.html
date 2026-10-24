@@ -31,6 +31,24 @@
   </div>
 </section>
 
+{% set tl = summary.timeline %}
+{% if tl %}
+<section class="card">
+  <div class="card-head">
+    <h3>Linha do tempo</h3>
+    <span class="muted small">uma barra por questão · altura = tempo de resposta</span>
+  </div>
+  <div class="timeline" style="--n: {{ tl.bars|length }}">
+    {% if tl.avg %}<div class="timeline-avg" style="bottom: {{ tl.avg }}%"><span>média {{ summary.avg_ms|seconds }}</span></div>{% endif %}
+    {% for b in tl.bars %}{% set a = b.attempt %}
+    <div class="timeline-bar {{ 'ok' if a.correct else 'bad' }}" style="height: {{ b.height }}%"
+         data-tip="{{ loop.index }}ª · {{ a.time_ms|seconds }} · {{ 'acertou' if a.correct else 'errou' }}|{{ a.a }} {{ SYMBOLS[a.op] }} {{ a.b }} = {% if a.given is none %}pulou{% else %}{{ a.given }}{% endif %}"></div>
+    {% endfor %}
+  </div>
+  <div class="timeline-axis muted small"><span>1ª questão</span><span>{{ tl.total_ms|duration }} no total</span></div>
+</section>
+{% endif %}
+
 <section class="card">
   <h3>Questões</h3>
   <table class="table compact">
@@ -40,7 +58,7 @@
       <tr class="{{ 'ok' if a.correct else 'bad' }}">
         <td>{{ loop.index }}</td>
         <td>{{ a.a }} {{ SYMBOLS[a.op] }} {{ a.b }} = {{ a.answer }}</td>
-        <td>{% if a.given is none %}<em>pulou</em>{% else %}{{ a.given }}{% endif %} {{ '✓' if a.correct else '✗' }}</td>
+        <td><span class="with-mark">{% if a.given is none %}<em>pulou</em>{% else %}{{ a.given }}{% endif %} {% include "_mark.html" %}</span></td>
         <td>{{ a.time_ms|seconds }}</td>
       </tr>
     {% endfor %}

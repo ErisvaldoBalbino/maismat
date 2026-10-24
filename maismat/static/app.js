@@ -439,10 +439,8 @@
     },
   };
 
-  // Dica flutuante para os quadradinhos do calendário.
-  function initHeatmapTips(main) {
-    const grid = $(".heatmap-grid", main);
-    if (!grid) return () => {};
+  // Dica flutuante para qualquer elemento com data-tip="detalhe|destaque" (o destaque vai em negrito).
+  function initTips(main) {
     const tip = document.createElement("div");
     tip.className = "tip";
     tip.hidden = true;
@@ -450,18 +448,18 @@
     const show = e => {
       const cell = e.target.closest("[data-tip]");
       if (!cell) { tip.hidden = true; return; }
-      const [day, count] = cell.dataset.tip.split("|");
+      const [detail, title] = cell.dataset.tip.split("|");
       tip.innerHTML = "<strong></strong><span></span>";
-      tip.firstChild.textContent = count;
-      tip.lastChild.textContent = day;
+      tip.firstChild.textContent = title;
+      tip.lastChild.textContent = detail;
       const r = cell.getBoundingClientRect();
       tip.style.left = `${r.left + r.width / 2}px`;
       tip.style.top = `${r.top}px`;
       tip.hidden = false;
     };
     const hide = () => { tip.hidden = true; };
-    grid.addEventListener("mouseover", show);
-    grid.addEventListener("mouseleave", hide);
+    main.addEventListener("mouseover", show);
+    main.addEventListener("mouseleave", hide);
     window.addEventListener("scroll", hide, { passive: true });
     return () => {
       tip.remove();
@@ -470,7 +468,7 @@
   }
 
   function initStats(main) {
-    const removeTips = initHeatmapTips(main);
+    const removeTips = initTips(main);
     const node = $("#chart-data", main);
     if (!node) return removeTips;
 
@@ -587,7 +585,7 @@
     };
   }
 
-  const PAGES = { index: initSetup, train: initTrain, stats: initStats };
+  const PAGES = { index: initSetup, train: initTrain, session: initTips, stats: initStats };
 
   mount();
 })();

@@ -45,6 +45,13 @@ def fmt_seconds(ms):
     return f"{ms / 1000:.2f}s".replace(".", ",")
 
 
+@bp.app_template_filter("duration")
+def fmt_duration(ms):
+    """Duração total: '42s' ou '4min 09s'."""
+    total = round(ms / 1000)
+    return f"{total // 60}min {total % 60:02d}s" if total >= 60 else f"{total}s"
+
+
 @bp.app_template_filter("pct")
 def fmt_pct(value):
     if value is None:

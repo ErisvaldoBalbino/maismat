@@ -194,3 +194,20 @@ def test_calendar_and_trends(client, app):
     cell = next(d for w in cal["weeks"] for d in w if d["day"] == today)
     assert cell["count"] == 3 and cell["level"] == 3 and not cell["future"]
     assert [(t["op"], t["total"], t["delta_ms"]) for t in trends] == [("add", 3, None)]
+
+
+def test_session_timeline(client):
+    data = start(client, mode="count", ops=["add"], count=3)
+    sid = data["session_id"]
+    for p, ms in zip(data["problems"], [1000, 4000, 2000]):
+        answer(client, sid, p, p["answer"] if ms != 4000 else p["answer"] + 1, time_ms=ms)
+    client.post(f"/api/sessoes/{sid}/finalizar")
+
+    page = client.get(f"/sessoes/{sid}").get_data(as_text=True)
+    assert page.count('class="timeline-bar ok"') == 2
+    assert page.count('class="timeline-bar bad"') == 1
+    assert "height: 100%" in page and "height: 25%" in page
+    assert page.count('class="mark ok"') == 2
+    assert "✗" not in page
+
+    assert stats.timeline([]) is None
