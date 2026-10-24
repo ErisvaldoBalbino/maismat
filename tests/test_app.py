@@ -221,3 +221,23 @@ def test_custom_time_and_count(client):
     assert client.get("/treinar?mode=count&ops=add&count=501").status_code == 302
     assert client.get("/treinar?mode=timed&ops=add&time_limit=5").status_code == 302
     assert 'placeholder="outro"' in client.get("/").get_data(as_text=True)
+
+
+def test_preferences(client):
+    page = client.get("/").get_data(as_text=True)
+    assert 'data-theme="light"' in page and 'data-confetti="off"' in page
+
+    res = client.post("/preferencias", json={"theme": "halloween", "confetti": True},
+                      headers={"X-Requested-With": "fetch"})
+    assert res.get_json() == {"theme": "halloween", "confetti": True}
+    page = client.get("/historico").get_data(as_text=True)
+    assert 'data-theme="halloween"' in page and 'data-confetti="on"' in page
+
+    res = client.post("/preferencias", json={"theme": "neon"}, headers={"X-Requested-With": "fetch"})
+    assert res.status_code == 400
+
+    # Sem JavaScript: formulário comum, checkbox desmarcado desliga o confete.
+    res = client.post("/preferencias", data={"theme": "dark"})
+    assert res.status_code == 302
+    page = client.get("/").get_data(as_text=True)
+    assert 'data-theme="dark"' in page and 'data-confetti="off"' in page

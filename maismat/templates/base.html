@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="{{ prefs.theme }}" data-confetti="{{ 'on' if prefs.confetti else 'off' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -18,6 +18,27 @@
       <a href="{{ url_for('main.history') }}" {% if request.endpoint == 'main.history' %}class="active"{% endif %}>Histórico</a>
       <a href="{{ url_for('main.performance') }}" {% if request.endpoint == 'main.performance' %}class="active"{% endif %}>Desempenho</a>
     </nav>
+    <div class="prefs">
+      <button type="button" class="icon-btn" id="prefs-toggle" aria-expanded="false" aria-controls="prefs-panel" aria-label="Preferências" title="Preferências">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>
+      </button>
+      <form class="prefs-panel" id="prefs-panel" method="post" action="{{ url_for('main.update_preferences') }}" hidden>
+        <fieldset>
+          <legend>Tema</legend>
+          <div class="segmented">
+            {% for key, name in THEMES.items() %}
+            <label><input type="radio" name="theme" value="{{ key }}" {% if prefs.theme == key %}checked{% endif %}><span>{{ name }}{% if key == 'halloween' %} 🎃{% endif %}</span></label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <label class="switch">
+          <input type="checkbox" name="confetti" value="1" {% if prefs.confetti %}checked{% endif %}>
+          <span class="switch-track" aria-hidden="true"></span>
+          Confete ao terminar um treino
+        </label>
+        <noscript><button type="submit" class="btn small">Salvar</button></noscript>
+      </form>
+    </div>
   </header>
   <main class="container" id="main" data-page="{% block page %}{% endblock %}">
     {% block content %}{% endblock %}

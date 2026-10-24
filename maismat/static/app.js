@@ -359,6 +359,7 @@
           const dias = data.streak === 1 ? "1 dia" : `${data.streak} dias`;
           toast(`Meta do dia batida! Sequência: ${dias}.`, "success", 6000);
         }
+        if (!data.message && document.documentElement.dataset.confetti === "on") confetti();
         // Substitui o histórico: voltar não recomeça um treino por engano.
         visit(data.redirect, { replace: true });
       } catch (err) {
@@ -620,5 +621,114 @@
 
   const PAGES = { index: initSetup, train: initTrain, session: initTips, stats: initStats };
 
+  // ---------------------------------------------------------------- preferências
+
+  const HALLOWEEN_KEY = "maismat:halloween";
+
+  // O painel fica no topo, fora do #main, então vive enquanto a página estiver aberta.
+  function initPrefs() {
+    const root = document.documentElement;
+    const button = $("#prefs-toggle");
+    const panel = $("#prefs-panel");
+    if (!button || !panel) return;
+
+    const open = show => {
+      panel.hidden = !show;
+      button.setAttribute("aria-expanded", show);
+    };
+    button.addEventListener("click", () => open(panel.hidden));
+    document.addEventListener("click", e => {
+      if (!panel.hidden && !e.target.closest(".prefs")) open(false);
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && !panel.hidden) { open(false); button.focus(); }
+    });
+
+    panel.addEventListener("change", async () => {
+      const theme = panel.theme.value;
+      const confettiOn = panel.confetti.checked;
+      const themeChanged = root.dataset.theme !== theme;
+      root.dataset.theme = theme;
+      root.dataset.confetti = confettiOn ? "on" : "off";
+      // Os gráficos leem as cores na hora de desenhar: remonta a página para pegar o tema novo.
+      if (themeChanged && $("#main").dataset.page === "stats") { unmount(); mount(); }
+      try {
+        await postJSON(panel.action, { theme, confetti: confettiOn });
+      } catch (err) {
+        toast(`Não foi possível salvar: ${err.message}`, "error");
+      }
+    });
+    panel.addEventListener("submit", e => e.preventDefault());
+
+    // Em outubro, avisa uma vez por ano que existe o tema de Halloween.
+    const year = new Date().getFullYear();
+    if (new Date().getMonth() === 9 && root.dataset.theme !== "halloween") {
+      try {
+        if (localStorage.getItem(HALLOWEEN_KEY) !== String(year)) {
+          localStorage.setItem(HALLOWEEN_KEY, year);
+          setTimeout(() => toast("É mês de Halloween! Experimente o tema 🎃 no botão de preferências, no topo.", "info", 9000), 800);
+        }
+      } catch (e) {}
+    }
+  }
+
+  // Confete feito à mão num canvas: cerca de 3 segundos e some sozinho.
+  function confetti() {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const canvas = document.createElement("canvas");
+    canvas.className = "confetti";
+    document.body.append(canvas);
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const w = innerWidth, h = innerHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+
+    const css = getComputedStyle(document.documentElement);
+    const colors = ["--op-add", "--op-sub", "--op-mul", "--op-div", "--accent"].map(v => css.getPropertyValue(v).trim());
+    // Dois jatos, dos cantos de baixo em direção ao centro.
+    const pieces = Array.from({ length: 160 }, (_, i) => {
+      const left = i % 2 === 0;
+      const angle = (left ? -60 : -120) * Math.PI / 180 + (Math.random() - .5) * .9;
+      const speed = 9 + Math.random() * 9;
+      return {
+        x: left ? -10 : w + 10,
+        y: h * .75,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 6 + Math.random() * 6,
+        rot: Math.random() * Math.PI,
+        spin: (Math.random() - .5) * .3,
+        color: colors[i % colors.length],
+      };
+    });
+
+    const start = performance.now();
+    function frame(now) {
+      const t = now - start;
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, t - 2200) / 800);
+      for (const p of pieces) {
+        p.vy += .32;
+        p.vx *= .985;
+        p.vy *= .985;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.spin;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2 * Math.abs(Math.cos(p.rot * 2)) + 1);
+        ctx.restore();
+      }
+      if (t < 3000) requestAnimationFrame(frame);
+      else canvas.remove();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  initPrefs();
   mount();
 })();

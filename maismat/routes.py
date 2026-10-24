@@ -26,6 +26,15 @@ MODES = {
     "weak": "Pontos fracos",
 }
 TIMED_BUFFER = 400  # questões geradas para o modo contra o tempo
+THEMES = {"light": "Claro", "dark": "Escuro", "halloween": "Halloween"}
+
+
+def preferences():
+    theme = get_setting("theme", "light")
+    return {
+        "theme": theme if theme in THEMES else "light",
+        "confetti": get_setting("confetti", "0") == "1",
+    }
 
 
 @bp.app_context_processor
@@ -35,6 +44,8 @@ def inject_names():
         "SYMBOLS": problems.SYMBOLS,
         "DIFFICULTY_NAMES": problems.DIFFICULTY_NAMES,
         "MODES": MODES,
+        "THEMES": THEMES,
+        "prefs": preferences(),
     }
 
 
@@ -186,6 +197,24 @@ def update_goal():
         streak = stats.streak_info(goal)
         return jsonify(message=message, html=render_template("_streak.html", streak=streak))
     flash(message, "success")
+    return redirect(request.referrer or url_for("main.index"))
+
+
+@bp.post("/preferencias")
+def update_preferences():
+    data = request.get_json(silent=True) or request.form
+    theme = data.get("theme", preferences()["theme"])
+    if theme not in THEMES:
+        if wants_json():
+            return jsonify(error="Tema desconhecido."), 400
+        flash("Tema desconhecido.", "error")
+        return redirect(request.referrer or url_for("main.index"))
+
+    set_setting("theme", theme)
+    set_setting("confetti", "1" if str(data.get("confetti", "")).lower() in ("1", "true", "on") else "0")
+    if wants_json():
+        return jsonify(preferences())
+    flash("Preferências salvas.", "success")
     return redirect(request.referrer or url_for("main.index"))
 
 
