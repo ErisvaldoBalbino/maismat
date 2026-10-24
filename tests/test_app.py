@@ -211,3 +211,13 @@ def test_session_timeline(client):
     assert "✗" not in page
 
     assert stats.timeline([]) is None
+
+
+def test_custom_time_and_count(client):
+    page = client.get("/treinar?mode=count&ops=add&count=37").get_data(as_text=True)
+    assert '"count": 37' in page
+    page = client.get("/treinar?mode=timed&ops=add&time_limit=45").get_data(as_text=True)
+    assert '"time_limit": 45' in page
+    assert client.get("/treinar?mode=count&ops=add&count=501").status_code == 302
+    assert client.get("/treinar?mode=timed&ops=add&time_limit=5").status_code == 302
+    assert 'placeholder="outro"' in client.get("/").get_data(as_text=True)

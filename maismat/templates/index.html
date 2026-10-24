@@ -5,7 +5,7 @@
 <div class="home">
 {% include "_streak.html" %}
 
-<form class="card setup" action="{{ url_for('main.train') }}" method="get" id="setup">
+<form class="card setup" action="{{ url_for('main.train') }}" method="get" id="setup" novalidate>
 
   <fieldset>
     <legend>Modo</legend>
@@ -54,6 +54,8 @@
       {% for s in [30, 60, 120, 300] %}
       <label><input type="radio" name="time_limit" value="{{ s }}" {% if s == 60 %}checked{% endif %}><span>{{ s if s < 60 else (s // 60) ~ ' min' }}{% if s < 60 %}s{% endif %}</span></label>
       {% endfor %}
+      <label class="custom"><input type="radio" name="time_limit" value="" data-custom>
+        <span><input type="number" min="10" max="600" step="5" inputmode="numeric" placeholder="outro" aria-label="Outro tempo, em segundos"> s</span></label>
     </div>
   </fieldset>
 
@@ -63,6 +65,8 @@
       {% for n in [10, 20, 50, 100] %}
       <label><input type="radio" name="count" value="{{ n }}" {% if n == 20 %}checked{% endif %}><span>{{ n }}</span></label>
       {% endfor %}
+      <label class="custom"><input type="radio" name="count" value="" data-custom>
+        <span><input type="number" min="1" max="500" inputmode="numeric" placeholder="outro" aria-label="Outra quantidade de questões"></span></label>
     </div>
   </fieldset>
 

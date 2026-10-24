@@ -212,6 +212,30 @@
     } catch (e) {}
     if (!form.mode.value) $('[name="mode"]', form).checked = true;
 
+    // "Outro": o número digitado vira o valor do rádio ao lado, que é o que vai no formulário.
+    const customs = [...form.querySelectorAll("[data-custom]")].map(radio => {
+      const field = $('input[type="number"]', radio.parentNode);
+      return { radio, field, min: +field.min, max: +field.max };
+    });
+    try {
+      const saved = JSON.parse(localStorage.getItem(SETUP_KEY) || "null") || {};
+      for (const { radio, field } of customs) {
+        const [value] = saved[radio.name] || [];
+        if (value && !form.querySelector(`[name="${radio.name}"][value="${value}"]`)) {
+          radio.value = field.value = value;
+          radio.checked = true;
+        }
+      }
+    } catch (e) {}
+    for (const { radio, field } of customs) {
+      field.addEventListener("focus", () => { radio.checked = true; update(); });
+      field.addEventListener("input", () => {
+        radio.value = field.value;
+        radio.checked = true;
+        save();
+      });
+    }
+
     form.addEventListener("change", () => { update(); save(); });
     form.addEventListener("submit", e => {
       const mode = form.mode.value;
@@ -220,6 +244,15 @@
         error = "Escolha pelo menos uma operação.";
       } else if (mode === "table" && !$('[name="tables"]:checked', form)) {
         error = "Escolha pelo menos uma tabuada.";
+      } else {
+        const bad = customs.find(c => c.radio.checked && !c.radio.matches(":disabled") &&
+          !(Number.isInteger(+c.field.value) && c.field.value !== "" && +c.field.value >= c.min && +c.field.value <= c.max));
+        if (bad) {
+          error = bad.radio.name === "time_limit"
+            ? `O tempo deve ficar entre ${bad.min} e ${bad.max} segundos.`
+            : `A quantidade deve ficar entre ${bad.min} e ${bad.max} questões.`;
+          bad.field.focus();
+        }
       }
       if (error) {
         e.preventDefault();
