@@ -1,3 +1,5 @@
+![+mat](docs/banner.png)
+
 # +mat (MaisMat)
 
 Sistema pessoal para treinar velocidade em operações básicas e acompanhar o desempenho.
