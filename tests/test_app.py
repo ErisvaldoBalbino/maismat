@@ -249,3 +249,83 @@ def test_sound_preference_and_manifest(client):
     assert 'data-sound="on"' in page and 'data-confetti="off"' in page
     assert 'rel="manifest"' in page
     assert client.get("/static/manifest.json").get_json()["short_name"] == "+mat"
+
+
+def test_daily_challenge(client):
+    first = start(client, mode="daily")
+    second = start(client, mode="daily")
+    assert first["problems"] == second["problems"]  # mesmas questões o dia todo
+    assert len(first["problems"]) == stats.DAILY_COUNT
+    assert {p["op"] for p in first["problems"]} <= {"add", "sub", "mul", "div"}
+
+    for data, wrong in [(first, 2), (second, 0)]:
+        for i, p in enumerate(data["problems"]):
+            answer(client, data["session_id"], p, p["answer"] + (1 if i < wrong else 0), time_ms=1000)
+    first_end = client.post(f"/api/sessoes/{first['session_id']}/finalizar").get_json()
+    second_end = client.post(f"/api/sessoes/{second['session_id']}/finalizar").get_json()
+    assert not first_end["daily_record"] and second_end["daily_record"]
+
+    page = client.get(f"/sessoes/{second['session_id']}").get_data(as_text=True)
+    assert "Desafio do dia" in page and "novo recorde do dia" in page
+    page = client.get(f"/sessoes/{first['session_id']}").get_data(as_text=True)
+    assert "30,00s" in page  # 20 s + 2 erros × 5 s
+    assert "Seu melhor hoje: 20,00s" in client.get("/").get_data(as_text=True)
+    assert "Desafio do dia" in client.get("/historico").get_data(as_text=True)
+
+
+def test_spaced_review(app):
+    day = date(2026, 1, 10)
+    with app.app_context():
+        due = lambda d: [(r["op"], r["a"], r["b"]) for r in stats.due_reviews(d)]
+        stats.record_review("mul", 8, 7, False, today=day)
+        assert due(day) == [] and due(day + timedelta(days=1)) == [("mul", 7, 8)]
+
+        stats.record_review("mul", 7, 8, True, today=day)  # antes da data: não conta
+        assert due(day + timedelta(days=1)) == [("mul", 7, 8)]
+
+        for days_later, next_due in [(1, 4), (4, 11)]:
+            stats.record_review("mul", 7, 8, True, today=day + timedelta(days=days_later))
+            assert due(day + timedelta(days=next_due - 1)) == []
+            assert due(day + timedelta(days=next_due)) == [("mul", 7, 8)]
+        stats.record_review("mul", 7, 8, True, today=day + timedelta(days=11))
+        assert due(day + timedelta(days=60)) == []  # passou nas três revisões
+
+        stats.record_review("sub", 9, 4, False, today=day)
+        stats.record_review("sub", 9, 4, False, today=day + timedelta(days=1))  # errou de novo: recomeça
+        assert due(day + timedelta(days=2)) == [("sub", 9, 4)]
+
+
+def test_wrong_answer_goes_to_review(client, app):
+    data = start(client, mode="count", ops=["mul"], count=1)
+    p = data["problems"][0]
+    answer(client, data["session_id"], p, p["answer"] + 1)
+    with app.app_context():
+        tomorrow = date.today() + timedelta(days=1)
+        assert len(stats.due_reviews(tomorrow)) == 1
+
+
+def test_import_backup(client, app):
+    data = start(client, mode="daily")
+    for p in data["problems"]:
+        answer(client, data["session_id"], p, p["answer"])
+    client.post(f"/api/sessoes/{data['session_id']}/finalizar")
+    backup = client.get("/exportar.json").get_data()
+
+    def upload(content):
+        return client.post("/importar", data={"file": (io.BytesIO(content), "maismat.json")},
+                           headers={"X-Requested-With": "fetch"}, content_type="multipart/form-data")
+
+    res = upload(backup).get_json()
+    assert res["message"] == "0 sessões importadas, 1 já existia."
+
+    with app.app_context():
+        db = get_db()
+        db.execute("DELETE FROM sessions")
+        db.commit()
+    res = upload(backup).get_json()
+    assert res["message"] == "1 sessão importada." and res["redirect"] == "/historico"
+    page = client.get("/historico").get_data(as_text=True)
+    assert "Desafio do dia" in page and "100%" in page
+
+    assert upload(b"nao e json").status_code == 400
+    assert upload(b'{"format": "outro"}').status_code == 400

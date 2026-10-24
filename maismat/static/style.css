@@ -573,6 +573,12 @@ legend { font-weight: 600; margin-bottom: 8px; font-size: 12px; color: var(--mut
 /* Confete: um canvas por cima de tudo, que some sozinho. */
 .confetti { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
 
+/* Textos explicativos do formulário e do resultado. */
+.hint { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.5; }
+.hint strong { color: var(--text); font-weight: 600; }
+.daily-result { margin: -6px 0 16px; font-size: 15px; }
+.import { display: inline-flex; margin: 0; }
+
 /* ---------- notificações */
 .toasts {
   position: fixed;

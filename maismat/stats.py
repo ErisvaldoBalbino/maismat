@@ -7,6 +7,9 @@ from .db import get_db
 from .problems import OPERATIONS
 
 DEFAULT_DAILY_GOAL = 50  # questões por dia
+REVIEW_INTERVALS = (1, 3, 7)  # dias até cada revisão de uma questão errada
+DAILY_COUNT = 20  # questões do desafio do dia
+DAILY_PENALTY_MS = 5000  # cada erro no desafio soma 5 s à pontuação
 
 
 def _summary_from_rows(rows):
@@ -59,12 +62,14 @@ def list_sessions(limit=200):
     return get_db().execute(
         """
         SELECT s.*,
+               d.day                                              AS daily_day,
                COUNT(a.id)                                        AS total,
                COALESCE(SUM(a.correct), 0)                        AS correct,
                AVG(CASE WHEN a.correct = 1 THEN a.time_ms END)    AS avg_ms,
                COALESCE(SUM(a.time_ms), 0)                        AS total_ms
         FROM sessions s
         LEFT JOIN attempts a ON a.session_id = s.id
+        LEFT JOIN daily_challenges d ON d.session_id = s.id
         GROUP BY s.id
         HAVING COUNT(a.id) > 0
         ORDER BY s.started_at DESC, s.id DESC
@@ -305,3 +310,101 @@ def totals():
         """
     ).fetchone()
     return dict(row)
+
+
+# ---------------------------------------------------------------- revisão espaçada
+
+
+def record_review(op, a, b, correct, today=None):
+    """Errou: a questão volta amanhã. Acertou na data marcada: o intervalo cresce
+    (1, 3, 7 dias) até sair da revisão. Acertos antes da data não contam.
+    Não faz commit: quem chama grava junto com a resposta."""
+    today = today or date.today()
+    key = _fact_key(op, a, b)
+    db = get_db()
+    if not correct:
+        db.execute(
+            "INSERT INTO reviews (op, a, b, step, due) VALUES (?, ?, ?, 0, ?) "
+            "ON CONFLICT (op, a, b) DO UPDATE SET step = 0, due = excluded.due",
+            (*key, (today + timedelta(days=REVIEW_INTERVALS[0])).isoformat()),
+        )
+        return
+    row = db.execute(
+        "SELECT step, due FROM reviews WHERE op = ? AND a = ? AND b = ?", key
+    ).fetchone()
+    if row is None or row["due"] > today.isoformat():
+        return
+    step = row["step"] + 1
+    if step >= len(REVIEW_INTERVALS):
+        db.execute("DELETE FROM reviews WHERE op = ? AND a = ? AND b = ?", key)
+    else:
+        due = (today + timedelta(days=REVIEW_INTERVALS[step])).isoformat()
+        db.execute(
+            "UPDATE reviews SET step = ?, due = ? WHERE op = ? AND a = ? AND b = ?",
+            (step, due, *key),
+        )
+
+
+def due_reviews(today=None):
+    """Questões cuja revisão é hoje (ou já passou)."""
+    today = (today or date.today()).isoformat()
+    rows = get_db().execute(
+        "SELECT op, a, b FROM reviews WHERE due <= ? ORDER BY due", (today,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def practice_facts(limit=20):
+    """Questões do modo Pontos fracos: as revisões do dia primeiro, depois os pontos fracos."""
+    facts = due_reviews()
+    seen = {_fact_key(f["op"], f["a"], f["b"]) for f in facts}
+    for f in weak_facts(limit=limit):
+        if len(facts) >= limit:
+            break
+        if _fact_key(f["op"], f["a"], f["b"]) not in seen:
+            facts.append({"op": f["op"], "a": f["a"], "b": f["b"]})
+    return facts
+
+
+# ---------------------------------------------------------------- desafio do dia
+
+
+def daily_scores(day):
+    """Pontuação (tempo total + 5 s por erro) de cada desafio completo do dia."""
+    rows = get_db().execute(
+        """
+        SELECT s.id, s.question_count,
+               COUNT(a.id) AS n, SUM(a.time_ms) AS ms, SUM(1 - a.correct) AS errors
+        FROM daily_challenges d
+        JOIN sessions s ON s.id = d.session_id
+        JOIN attempts a ON a.session_id = s.id
+        WHERE d.day = ?
+        GROUP BY s.id
+        HAVING n >= s.question_count
+        """,
+        (day,),
+    ).fetchall()
+    return {r["id"]: r["ms"] + DAILY_PENALTY_MS * r["errors"] for r in rows}
+
+
+def daily_challenge(today=None):
+    scores = daily_scores((today or date.today()).isoformat())
+    return {"best_ms": min(scores.values(), default=None), "tries": len(scores)}
+
+
+def session_daily(session_id):
+    """Pontuação de uma sessão do desafio e o melhor resultado daquele dia."""
+    row = get_db().execute(
+        "SELECT day FROM daily_challenges WHERE session_id = ?", (session_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    scores = daily_scores(row["day"])
+    score = scores.get(session_id)
+    best = min(scores.values(), default=None)
+    return {
+        "day": row["day"],
+        "score_ms": score,
+        "best_ms": best,
+        "is_best": score is not None and score == best and len(scores) > 1,
+    }

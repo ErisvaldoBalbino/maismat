@@ -1,6 +1,9 @@
 import csv
 import io
 import json
+import random
+import sqlite3
+from datetime import date
 
 from flask import (
     Blueprint,
@@ -34,7 +37,7 @@ def preferences():
     return {
         "theme": theme if theme in THEMES else "light",
         "confetti": get_setting("confetti", "0") == "1",
-        "sound": get_setting("sound", "0") == "1",
+        "sound": get_setting("sound", "1") == "1",
     }
 
 
@@ -83,6 +86,17 @@ def wants_json():
 def parse_config(data):
     """Valida a configuração de uma sessão. Levanta ValueError com mensagem amigável."""
     mode = data.get("mode", "count")
+    # O desafio do dia é uma sessão de N questões com as mesmas questões o dia todo.
+    if mode == "daily" or str(data.get("daily", "")).lower() in ("1", "true"):
+        return {
+            "mode": "count",
+            "ops": list(problems.OPERATIONS),
+            "difficulty": "easy",
+            "tables": [],
+            "time_limit": None,
+            "count": stats.DAILY_COUNT,
+            "daily": True,
+        }
     if mode not in MODES:
         raise ValueError("Modo inválido.")
 
@@ -136,7 +150,9 @@ def index():
     return render_template(
         "index.html",
         streak=stats.streak_info(daily_goal()),
-        weak_count=len(stats.weak_facts()),
+        weak_count=len(stats.practice_facts()),
+        review_count=len(stats.due_reviews()),
+        daily=stats.daily_challenge(),
     )
 
 
@@ -155,11 +171,18 @@ def train():
 
 @bp.route("/sessoes/<int:session_id>")
 def session_detail(session_id):
-    session = get_db().execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    session = get_db().execute(
+        """SELECT s.*, d.day AS daily_day FROM sessions s
+           LEFT JOIN daily_challenges d ON d.session_id = s.id WHERE s.id = ?""",
+        (session_id,),
+    ).fetchone()
     if session is None:
         abort(404)
     return render_template(
-        "session.html", session=session, summary=stats.session_summary(session_id)
+        "session.html",
+        session=session,
+        summary=stats.session_summary(session_id),
+        daily=stats.session_daily(session_id),
     )
 
 
@@ -235,15 +258,18 @@ def api_create_session():
 
     weak = None
     if config["mode"] == "weak":
-        weak = stats.weak_facts(limit=20)
+        weak = stats.practice_facts(limit=20)
         if not weak:
             return jsonify(error="Ainda não há pontos fracos suficientes. Treine mais um pouco!"), 400
         config["ops"] = sorted({f["op"] for f in weak}, key=problems.OPERATIONS.index)
 
     n = TIMED_BUFFER if config["mode"] == "timed" else config["count"]
+    today = date.today().isoformat()
     items = problems.generate(
         config["mode"], config["ops"], config["difficulty"], n,
         tables=config["tables"], weak_facts=weak,
+        # Semente fixa por dia: o desafio tem as mesmas questões o dia inteiro.
+        rng=random.Random(f"maismat-{today}") if config.get("daily") else random,
     )
 
     db = get_db()
@@ -261,6 +287,8 @@ def api_create_session():
             now_iso(),
         ),
     )
+    if config.get("daily"):
+        db.execute("INSERT INTO daily_challenges (session_id, day) VALUES (?, ?)", (cur.lastrowid, today))
     db.commit()
     return jsonify(session_id=cur.lastrowid, problems=items, config=config), 201
 
@@ -299,6 +327,7 @@ def api_attempt(session_id):
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (session_id, op, a, b, answer, given, correct, time_ms, now_iso()),
     )
+    stats.record_review(op, a, b, correct)
     db.commit()
     return jsonify(correct=bool(correct), answer=answer)
 
@@ -322,10 +351,12 @@ def api_finish(session_id):
     # Avisa quando foi esta sessão que fez a meta do dia ser batida.
     streak = stats.streak_info(daily_goal())
     goal_reached = streak["today_met"] and streak["today"] - total < streak["goal"]
+    daily = stats.session_daily(session_id)
     return jsonify(
         redirect=url_for("main.session_detail", session_id=session_id),
         goal_reached=goal_reached,
         streak=streak["current"],
+        daily_record=bool(daily and daily["is_best"]),
     )
 
 
@@ -342,12 +373,76 @@ def export_json():
         "sessions": [dict(r) for r in db.execute("SELECT * FROM sessions ORDER BY id")],
         "attempts": [dict(r) for r in db.execute("SELECT * FROM attempts ORDER BY id")],
         "settings": [dict(r) for r in db.execute("SELECT * FROM settings ORDER BY key")],
+        "daily_challenges": [dict(r) for r in db.execute("SELECT * FROM daily_challenges")],
+        "reviews": [dict(r) for r in db.execute("SELECT * FROM reviews")],
     }
     return Response(
         json.dumps(payload, ensure_ascii=False, indent=2),
         mimetype="application/json",
         headers={"Content-Disposition": "attachment; filename=maismat.json"},
     )
+
+
+@bp.post("/importar")
+def import_json():
+    """Restaura um arquivo do Exportar JSON. Sessões que já existem são puladas."""
+    try:
+        payload = json.load(request.files["file"])
+        if payload.get("format") != "maismat-export":
+            raise ValueError
+        added, skipped = _import_payload(payload)
+    except (KeyError, ValueError, TypeError, AttributeError, sqlite3.Error):
+        get_db().rollback()
+        message = "Arquivo inválido: use um JSON gerado pelo Exportar JSON do MaisMat."
+        if wants_json():
+            return jsonify(error=message), 400
+        flash(message, "error")
+        return redirect(url_for("main.history"))
+
+    message = f"{added} {'sessão importada' if added == 1 else 'sessões importadas'}"
+    if skipped:
+        message += f", {skipped} já {'existia' if skipped == 1 else 'existiam'}"
+    message += "."
+    if wants_json():
+        return jsonify(message=message, redirect=url_for("main.history"))
+    flash(message, "success")
+    return redirect(url_for("main.history"))
+
+
+def _import_payload(payload):
+    db = get_db()
+    existing = {
+        (r["started_at"], r["mode"], r["operations"])
+        for r in db.execute("SELECT started_at, mode, operations FROM sessions")
+    }
+    ids = {}  # id no arquivo -> id novo
+    skipped = 0
+    for s in payload["sessions"]:
+        if (s["started_at"], s["mode"], s["operations"]) in existing:
+            skipped += 1
+            continue
+        cur = db.execute(
+            """INSERT INTO sessions (mode, operations, difficulty, time_limit_s,
+                                     question_count, tables, started_at, ended_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (s["mode"], s["operations"], s["difficulty"], s.get("time_limit_s"),
+             s.get("question_count"), s.get("tables"), s["started_at"], s.get("ended_at")),
+        )
+        ids[s["id"]] = cur.lastrowid
+    for a in payload["attempts"]:
+        if a["session_id"] in ids:
+            db.execute(
+                """INSERT INTO attempts (session_id, op, a, b, answer, given, correct, time_ms, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (ids[a["session_id"]], a["op"], a["a"], a["b"], a["answer"], a.get("given"),
+                 a["correct"], a["time_ms"], a["created_at"]),
+            )
+    for d in payload.get("daily_challenges", []):
+        if d["session_id"] in ids:
+            db.execute("INSERT INTO daily_challenges (session_id, day) VALUES (?, ?)",
+                       (ids[d["session_id"]], d["day"]))
+    db.commit()
+    return len(ids), skipped
 
 
 @bp.route("/exportar/respostas.csv")

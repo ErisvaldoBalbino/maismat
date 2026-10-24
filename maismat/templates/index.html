@@ -17,7 +17,26 @@
         <input type="radio" name="mode" value="weak" {% if not weak_count %}disabled{% endif %}>
         <span>Pontos fracos{% if weak_count %} ({{ weak_count }}){% endif %}</span>
       </label>
+      <label><input type="radio" name="mode" value="daily"><span>Desafio do dia</span></label>
     </div>
+  </fieldset>
+
+  <fieldset data-show="daily">
+    <legend>Desafio do dia</legend>
+    <p class="hint">
+      20 questões das quatro operações, as mesmas o dia inteiro. A pontuação é o tempo total
+      mais 5&nbsp;s por erro: quanto menor, melhor.
+      {% if daily.best_ms %}<br><strong>Seu melhor hoje: {{ daily.best_ms|seconds }}</strong>
+      ({{ daily.tries }} {{ 'tentativa' if daily.tries == 1 else 'tentativas' }}).{% endif %}
+    </p>
+  </fieldset>
+
+  <fieldset data-show="weak">
+    <legend>Pontos fracos</legend>
+    <p class="hint">
+      {% if review_count %}<strong>{{ review_count }} {{ 'questão' if review_count == 1 else 'questões' }} para revisar hoje.</strong>
+      {% endif %}Questões erradas voltam depois de 1, 3 e 7 dias até você acertar todas as revisões.
+    </p>
   </fieldset>
 
   <fieldset data-show="timed count table">

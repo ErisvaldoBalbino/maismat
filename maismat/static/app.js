@@ -139,6 +139,7 @@
         return;
       }
       if (data.message) toast(data.message, "success");
+      if (data.redirect) visit(data.redirect, { replace: true });
       const target = form.dataset.target && document.getElementById(form.dataset.target);
       if (target && data.html) {
         const tpl = document.createElement("template");
@@ -149,6 +150,13 @@
       toast("Não foi possível salvar. O servidor está rodando?", "error");
     } finally {
       if (button && button.isConnected) button.disabled = false;
+    }
+  });
+
+  // Escolher um arquivo já envia o formulário (ex.: Importar JSON).
+  document.addEventListener("change", e => {
+    if (e.target.matches('form.import input[type="file"]') && e.target.files.length) {
+      e.target.form.requestSubmit();
     }
   });
 
@@ -240,7 +248,7 @@
     form.addEventListener("submit", e => {
       const mode = form.mode.value;
       let error = null;
-      if (mode !== "weak" && mode !== "table" && !$('[name="ops"]:checked', form)) {
+      if (!["weak", "table", "daily"].includes(mode) && !$('[name="ops"]:checked', form)) {
         error = "Escolha pelo menos uma operação.";
       } else if (mode === "table" && !$('[name="tables"]:checked', form)) {
         error = "Escolha pelo menos uma tabuada.";
@@ -360,6 +368,7 @@
           const dias = data.streak === 1 ? "1 dia" : `${data.streak} dias`;
           toast(`Meta do dia batida! Sequência: ${dias}.`, "success", 6000);
         }
+        if (data.daily_record) toast("Novo recorde no desafio do dia!", "success", 6000);
         if (!data.message && document.documentElement.dataset.confetti === "on") confetti();
         // Substitui o histórico: voltar não recomeça um treino por engano.
         visit(data.redirect, { replace: true });

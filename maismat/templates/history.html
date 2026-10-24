@@ -8,6 +8,10 @@
     <div class="actions">
       <a class="btn ghost small" href="{{ url_for('main.export_json') }}" download>Exportar JSON</a>
       <a class="btn ghost small" href="{{ url_for('main.export_csv') }}" download>Exportar CSV</a>
+      <form class="import" method="post" action="{{ url_for('main.import_json') }}" enctype="multipart/form-data">
+        <label class="btn ghost small">Importar JSON<input type="file" name="file" accept=".json,application/json" hidden></label>
+        <noscript><button type="submit" class="btn small">Enviar</button></noscript>
+      </form>
     </div>
   </div>
   {% if sessions %}

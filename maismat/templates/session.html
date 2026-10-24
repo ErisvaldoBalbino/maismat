@@ -5,6 +5,15 @@
 <section class="card">
   <h2>Resultado</h2>
   <p class="muted">{% include "_session_label.html" %} · {{ session.started_at.replace('T', ' ') }}</p>
+  {% if daily %}
+  <p class="daily-result">
+    {% if daily.score_ms is none %}Desafio incompleto: responda as 20 questões para valer pontuação.
+    {% else %}Pontuação: <strong>{{ daily.score_ms|seconds }}</strong> (tempo + 5&nbsp;s por erro)
+      {%- if daily.is_best %} · <strong>novo recorde do dia!</strong>
+      {%- elif daily.best_ms %} · melhor do dia: {{ daily.best_ms|seconds }}{% endif %}
+    {% endif %}
+  </p>
+  {% endif %}
 
   <div class="stats-grid">
     <div class="stat"><span class="big">{{ summary.correct }}<small>/{{ summary.total }}</small></span><span class="label">acertos</span></div>

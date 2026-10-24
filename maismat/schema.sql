@@ -33,3 +33,19 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Sessões que foram o desafio do dia (gravadas como modo "count").
+CREATE TABLE IF NOT EXISTS daily_challenges (
+    session_id INTEGER PRIMARY KEY REFERENCES sessions (id) ON DELETE CASCADE,
+    day        TEXT    NOT NULL                -- AAAA-MM-DD
+);
+
+-- Revisão espaçada: uma questão errada volta depois de 1, 3 e 7 dias.
+CREATE TABLE IF NOT EXISTS reviews (
+    op   TEXT    NOT NULL,
+    a    INTEGER NOT NULL,
+    b    INTEGER NOT NULL,
+    step INTEGER NOT NULL DEFAULT 0,           -- quantas revisões já foram acertadas
+    due  TEXT    NOT NULL,                     -- AAAA-MM-DD
+    PRIMARY KEY (op, a, b)
+);
