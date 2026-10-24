@@ -4,23 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}MaisMat{% endblock %} · MaisMat</title>
+  <link rel="preload" href="{{ url_for('static', filename='fonts/bricolage-grotesque-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ url_for('static', filename='fonts/instrument-sans-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="{{ url_for('main.index') }}">+mat</a>
-    <nav>
+    <nav id="nav">
       <a href="{{ url_for('main.index') }}" {% if request.endpoint == 'main.index' %}class="active"{% endif %}>Treinar</a>
       <a href="{{ url_for('main.history') }}" {% if request.endpoint == 'main.history' %}class="active"{% endif %}>Histórico</a>
       <a href="{{ url_for('main.performance') }}" {% if request.endpoint == 'main.performance' %}class="active"{% endif %}>Desempenho</a>
     </nav>
   </header>
-  <main class="container">
-    {% for msg in get_flashed_messages() %}
-      <div class="flash">{{ msg }}</div>
-    {% endfor %}
+  <main class="container" id="main" data-page="{% block page %}{% endblock %}">
     {% block content %}{% endblock %}
+    {# Avisos do servidor viram notificações (toasts) no cliente. #}
+    <script type="application/json" class="flashes">{{ get_flashed_messages(with_categories=true)|tojson }}</script>
   </main>
-  {% block scripts %}{% endblock %}
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 </body>
 </html>

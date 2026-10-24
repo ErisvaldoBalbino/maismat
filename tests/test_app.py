@@ -151,3 +151,32 @@ def test_always_wrong_ranks_above_only_slow(client, app):
     with app.app_context():
         weak = stats.weak_facts()
     assert [(f["a"], f["b"]) for f in weak] == [(7, 8), (7, 9)]
+
+
+def test_goal_setting_async(client):
+    headers = {"X-Requested-With": "fetch"}
+    res = client.post("/meta", data={"daily_goal": "25"}, headers=headers)
+    assert res.status_code == 200
+    data = res.get_json()
+    assert "25" in data["message"] and 'id="streak"' in data["html"]
+    assert client.post("/meta", data={"daily_goal": "0"}, headers=headers).status_code == 400
+
+
+def test_finish_reports_goal_reached(client):
+    client.post("/meta", data={"daily_goal": "2"})
+    data = start(client, mode="count", ops=["add"], count=2)
+    for p in data["problems"]:
+        answer(client, data["session_id"], p, p["answer"])
+    res = client.post(f"/api/sessoes/{data['session_id']}/finalizar").get_json()
+    assert res["goal_reached"] is True and res["streak"] == 1
+
+    # Uma segunda sessão no mesmo dia não avisa de novo.
+    data = start(client, mode="count", ops=["add"], count=1)
+    answer(client, data["session_id"], data["problems"][0], 0)
+    res = client.post(f"/api/sessoes/{data['session_id']}/finalizar").get_json()
+    assert res["goal_reached"] is False
+
+
+def test_flash_messages_reach_page(client):
+    page = client.get("/treinar?mode=count", follow_redirects=True).get_data(as_text=True)
+    assert "Escolha pelo menos uma opera" in page and '"error"' in page

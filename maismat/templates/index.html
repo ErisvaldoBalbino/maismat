@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block page %}index{% endblock %}
 {% block title %}Treinar{% endblock %}
 {% block content %}
 {% include "_streak.html" %}
@@ -76,59 +77,3 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}
-<script>
-  // Mostra só os campos relevantes ao modo escolhido e lembra a última configuração.
-  const form = document.getElementById("setup");
-  const KEY = "maismat:setup";
-
-  function update() {
-    const mode = form.mode.value;
-    form.querySelectorAll("fieldset[data-show]").forEach(fs => {
-      const on = fs.dataset.show.split(" ").includes(mode);
-      fs.hidden = !on;
-      fs.disabled = !on;
-    });
-    // Na tabuada só fazem sentido multiplicação e divisão.
-    form.querySelectorAll(".chips [data-op]").forEach(l => {
-      const hide = mode === "table" && !["mul", "div"].includes(l.dataset.op);
-      l.hidden = hide;
-      l.querySelector("input").disabled = hide;
-    });
-  }
-
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (saved) {
-      for (const [name, values] of Object.entries(saved)) {
-        form.querySelectorAll(`[name="${name}"]`).forEach(el => {
-          if (el.disabled) return;
-          el.checked = values.includes(el.value);
-        });
-      }
-    }
-  } catch (e) {}
-  if (!form.mode.value) form.querySelector('[name="mode"]').checked = true;
-
-  form.addEventListener("change", update);
-  form.addEventListener("submit", e => {
-    if (form.mode.value !== "weak" && form.mode.value !== "table" && !form.querySelector('[name="ops"]:checked')) {
-      e.preventDefault();
-      alert("Escolha pelo menos uma operação.");
-      return;
-    }
-    if (form.mode.value === "table" && !form.querySelector('[name="tables"]:checked')) {
-      e.preventDefault();
-      alert("Escolha pelo menos uma tabuada.");
-      return;
-    }
-    const data = {};
-    for (const el of form.querySelectorAll("input[name]")) {
-      data[el.name] ??= [];
-      if (el.checked) data[el.name].push(el.value);
-    }
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
-  });
-  update();
-</script>
-{% endblock %}

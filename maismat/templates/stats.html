@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block page %}stats{% endblock %}
 {% block title %}Desempenho{% endblock %}
 {% block content %}
 {% include "_streak.html" %}
@@ -13,6 +14,7 @@
 </section>
 
 {% if series.days %}
+<script type="application/json" id="chart-data">{{ {'series': series, 'names': OP_NAMES}|tojson }}</script>
 <section class="card">
   <h3>Tempo médio por questão <span class="muted small">(só acertos, em segundos — menor é melhor)</span></h3>
   <div class="chart"><canvas id="chart-time"></canvas></div>
@@ -52,40 +54,3 @@
 </section>
 {% endblock %}
 
-{% block scripts %}
-{% if series.days %}
-<script src="{{ url_for('static', filename='chart.umd.js') }}"></script>
-<script>
-  const data = {{ series|tojson }};
-  const names = {{ OP_NAMES|tojson }};
-  const colors = { add: "#2f7df6", sub: "#e8590c", mul: "#2b9a66", div: "#9c36b5" };
-  const labels = data.days.map(d => d.slice(8, 10) + "/" + d.slice(5, 7));
-
-  function chart(id, key, transform, yOpts) {
-    new Chart(document.getElementById(id), {
-      type: "line",
-      data: {
-        labels,
-        datasets: Object.entries(data.series).map(([op, s]) => ({
-          label: names[op],
-          data: s[key].map(v => (v === null ? null : transform(v))),
-          borderColor: colors[op],
-          backgroundColor: colors[op],
-          spanGaps: true,
-          tension: 0.25,
-          pointRadius: 3,
-        })),
-      },
-      options: {
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        scales: { y: yOpts },
-        plugins: { legend: { position: "bottom" } },
-      },
-    });
-  }
-  chart("chart-time", "avg_ms", v => v / 1000, { beginAtZero: true });
-  chart("chart-acc", "accuracy", v => v, { min: 0, max: 100 });
-</script>
-{% endif %}
-{% endblock %}

@@ -56,6 +56,11 @@ def daily_goal():
     return int(get_setting("daily_goal", stats.DEFAULT_DAILY_GOAL))
 
 
+def wants_json():
+    """Requisições feitas pelo app.js (navegação sem recarregar) pedem JSON."""
+    return request.headers.get("X-Requested-With") == "fetch"
+
+
 def parse_config(data):
     """Valida a configuração de uma sessão. Levanta ValueError com mensagem amigável."""
     mode = data.get("mode", "count")
@@ -125,7 +130,7 @@ def train():
         args["tables"] = request.args.getlist("tables")
         config = parse_config(args)
     except ValueError as e:
-        flash(str(e))
+        flash(str(e), "error")
         return redirect(url_for("main.index"))
     return render_template("train.html", config=config)
 
@@ -163,10 +168,17 @@ def update_goal():
         if not 1 <= goal <= 10000:
             raise ValueError
     except ValueError:
-        flash("Meta inválida.")
-    else:
-        set_setting("daily_goal", goal)
-        flash(f"Meta diária atualizada para {goal} questões.")
+        if wants_json():
+            return jsonify(error="Meta inválida: use um número entre 1 e 10000."), 400
+        flash("Meta inválida.", "error")
+        return redirect(request.referrer or url_for("main.index"))
+
+    set_setting("daily_goal", goal)
+    message = f"Meta diária atualizada para {goal} questões."
+    if wants_json():
+        streak = stats.streak_info(goal)
+        return jsonify(message=message, html=render_template("_streak.html", streak=streak))
+    flash(message, "success")
     return redirect(request.referrer or url_for("main.index"))
 
 
@@ -264,8 +276,16 @@ def api_finish(session_id):
         # Sessão abandonada sem respostas: não polui o histórico.
         db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
         db.commit()
-        return jsonify(redirect=url_for("main.index"))
-    return jsonify(redirect=url_for("main.session_detail", session_id=session_id))
+        return jsonify(redirect=url_for("main.index"), message="Treino encerrado sem respostas, nada foi salvo.")
+
+    # Avisa quando foi esta sessão que fez a meta do dia ser batida.
+    streak = stats.streak_info(daily_goal())
+    goal_reached = streak["today_met"] and streak["today"] - total < streak["goal"]
+    return jsonify(
+        redirect=url_for("main.session_detail", session_id=session_id),
+        goal_reached=goal_reached,
+        streak=streak["current"],
+    )
 
 
 # ---------------------------------------------------------------- exportação
