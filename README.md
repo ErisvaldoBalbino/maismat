@@ -9,10 +9,10 @@ Feito com Flask + SQLite, roda localmente.
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-flask --app maismat run
+flask run                        # porta 5001, definida em .flaskenv
 ```
 
-Abra http://127.0.0.1:5000. O banco é criado automaticamente em `instance/maismat.sqlite`.
+Abra http://127.0.0.1:5001. O banco é criado automaticamente em `instance/maismat.sqlite`.
 
 ## Funcionalidades
 

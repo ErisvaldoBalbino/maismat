@@ -1,0 +1,2 @@
+FLASK_APP=maismat
+FLASK_RUN_PORT=5001
