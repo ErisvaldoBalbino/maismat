@@ -1,0 +1,13 @@
+{
+  "name": "MaisMat",
+  "short_name": "+mat",
+  "description": "Treino de velocidade nas quatro operações.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#efe7da",
+  "theme_color": "#efe7da",
+  "icons": [
+    { "src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

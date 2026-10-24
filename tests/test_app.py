@@ -229,7 +229,7 @@ def test_preferences(client):
 
     res = client.post("/preferencias", json={"theme": "halloween", "confetti": True},
                       headers={"X-Requested-With": "fetch"})
-    assert res.get_json() == {"theme": "halloween", "confetti": True}
+    assert res.get_json() == {"theme": "halloween", "confetti": True, "sound": False}
     page = client.get("/historico").get_data(as_text=True)
     assert 'data-theme="halloween"' in page and 'data-confetti="on"' in page
 
@@ -241,3 +241,11 @@ def test_preferences(client):
     assert res.status_code == 302
     page = client.get("/").get_data(as_text=True)
     assert 'data-theme="dark"' in page and 'data-confetti="off"' in page
+
+
+def test_sound_preference_and_manifest(client):
+    client.post("/preferencias", json={"theme": "light", "sound": True}, headers={"X-Requested-With": "fetch"})
+    page = client.get("/").get_data(as_text=True)
+    assert 'data-sound="on"' in page and 'data-confetti="off"' in page
+    assert 'rel="manifest"' in page
+    assert client.get("/static/manifest.json").get_json()["short_name"] == "+mat"

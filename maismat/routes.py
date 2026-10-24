@@ -34,6 +34,7 @@ def preferences():
     return {
         "theme": theme if theme in THEMES else "light",
         "confetti": get_setting("confetti", "0") == "1",
+        "sound": get_setting("sound", "0") == "1",
     }
 
 
@@ -211,7 +212,11 @@ def update_preferences():
         return redirect(request.referrer or url_for("main.index"))
 
     set_setting("theme", theme)
-    set_setting("confetti", "1" if str(data.get("confetti", "")).lower() in ("1", "true", "on") else "0")
+    def flag(name):
+        return "1" if str(data.get(name, "")).lower() in ("1", "true", "on") else "0"
+
+    set_setting("confetti", flag("confetti"))
+    set_setting("sound", flag("sound"))
     if wants_json():
         return jsonify(preferences())
     flash("Preferências salvas.", "success")

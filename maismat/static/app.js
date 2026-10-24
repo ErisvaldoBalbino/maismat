@@ -311,6 +311,7 @@
       void el.stage.offsetWidth; // reinicia a animação
       el.stage.classList.add(ok ? "ok" : "bad");
       el.feedback.textContent = text;
+      if (document.documentElement.dataset.sound === "on") beep(ok);
     }
 
     function submit(skip = false) {
@@ -647,13 +648,15 @@
     panel.addEventListener("change", async () => {
       const theme = panel.theme.value;
       const confettiOn = panel.confetti.checked;
+      const soundOn = panel.sound.checked;
       const themeChanged = root.dataset.theme !== theme;
       root.dataset.theme = theme;
       root.dataset.confetti = confettiOn ? "on" : "off";
+      root.dataset.sound = soundOn ? "on" : "off";
       // Os gráficos leem as cores na hora de desenhar: remonta a página para pegar o tema novo.
       if (themeChanged && $("#main").dataset.page === "stats") { unmount(); mount(); }
       try {
-        await postJSON(panel.action, { theme, confetti: confettiOn });
+        await postJSON(panel.action, { theme, confetti: confettiOn, sound: soundOn });
       } catch (err) {
         toast(`Não foi possível salvar: ${err.message}`, "error");
       }
@@ -670,6 +673,81 @@
         }
       } catch (e) {}
     }
+  }
+
+  // Sons de máquina de escrever, gerados na hora: ruído curto e filtrado em vez de notas.
+  // Acerto é um "tac" seguido de um "ding" suave; erro são dois baques graves e abafados.
+  let audio = null;
+  let noise = null;
+  function beep(ok) {
+    try {
+      audio ??= new AudioContext();
+      if (!noise) {
+        noise = audio.createBuffer(1, audio.sampleRate * 0.1, audio.sampleRate);
+        const data = noise.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      }
+      const now = audio.currentTime;
+      if (ok) {
+        hit(now, { filter: "bandpass", freq: 1800, q: 1.2, volume: 0.3, length: 0.03 });
+        thump(now, 140, 0.1);
+        ding(now + 0.03);
+      } else {
+        for (const t of [now, now + 0.09]) {
+          hit(t, { filter: "lowpass", freq: 500, q: 0.7, volume: 0.5, length: 0.07 });
+          thump(t, 90, 0.2);
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Estalo: ruído passando por um filtro, com volume caindo rápido.
+  function hit(t, { filter, freq, q, volume, length }) {
+    const src = audio.createBufferSource();
+    src.buffer = noise;
+    const bq = audio.createBiquadFilter();
+    bq.type = filter;
+    bq.frequency.value = freq;
+    bq.Q.value = q;
+    const gain = audio.createGain();
+    gain.gain.setValueAtTime(volume, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + length);
+    src.connect(bq).connect(gain).connect(audio.destination);
+    src.start(t);
+    src.stop(t + length + 0.02);
+  }
+
+  // Campainha: dó e sol agudos juntos, abafados por um filtro e sumindo devagar.
+  function ding(t) {
+    const soft = audio.createBiquadFilter();
+    soft.type = "lowpass";
+    soft.frequency.value = 2400;
+    soft.connect(audio.destination);
+    [[1047, 0.09], [1568, 0.05]].forEach(([freq, volume]) => {
+      const osc = audio.createOscillator();
+      osc.frequency.setValueAtTime(freq * 0.98, t);
+      osc.frequency.exponentialRampToValueAtTime(freq, t + 0.03);
+      const gain = audio.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(volume, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      osc.connect(gain).connect(soft);
+      osc.start(t);
+      osc.stop(t + 0.4);
+    });
+  }
+
+  // Baque: uma onda grave que despenca de frequência, dando o "corpo" da tecla.
+  function thump(t, freq, volume) {
+    const osc = audio.createOscillator();
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(freq / 2, t + 0.05);
+    const gain = audio.createGain();
+    gain.gain.setValueAtTime(volume, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(t);
+    osc.stop(t + 0.08);
   }
 
   // Confete feito à mão num canvas: cerca de 3 segundos e some sozinho.
